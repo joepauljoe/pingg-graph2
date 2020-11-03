@@ -1,1 +1,3 @@
-# pingg-graph2 git add . git commit -m first commit git remote add origin https://github.com/joepauljoe/pingg-graph2.git git push -u origin master
+# pingg-graph 2!
+
+The server application on Google AppEngine that allows pingg to query our Neo4j graph database!
