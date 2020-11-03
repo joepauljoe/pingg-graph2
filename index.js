@@ -565,7 +565,7 @@ app.post('/users/:userID/rated-game', jsonParser, async (req,res) => {
                     var result = {"response": "Unknown Error Occurred"}
                     res.send(result)
                 } finally {
-                    var result = {"response": "Success!"}
+                    var result = {"newRating": newRating}
                     res.send(result)
                     await session3.close()
                 }
