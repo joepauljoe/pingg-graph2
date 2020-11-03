@@ -21,15 +21,15 @@ app.get('/', (req, res) => {
 })
 
 app.post('/user/:userID', jsonParser, async (req,res) => {
-    if(req.params.userID) {
-        if(req.body.handle) {
-            if(req.body.firstName) {
-                if(req.body.lastName) {
-                    if(req.body.screenNames) {
-                        if(req.body.ping) {
-                            if(req.body.latitude) {
-                                if(req.body.longitude) {
-                                    if(req.body.avatarVal) {
+    if(req.params.userID || req.params.userName == "") {
+        if(req.body.handle || req.body.handle == "") {
+            if(req.body.firstName || req.body.firstName == "") {
+                if(req.body.lastName || req.body.lastName == "") {
+                    if(req.body.screenNames || req.body.screenNames == "") {
+                        if(req.body.ping || req.body.ping == 0) {
+                            if(req.body.latitude || req.body.latitude == 0) {
+                                if(req.body.longitude || req.body.longitude == 0) {
+                                    if(req.body.avatarVal || req.body.avatarVal == 0) {
                                         let userID = req.params.userID
                                         let handle = req.body.handle
                                         let firstName = req.body.firstName
@@ -199,19 +199,19 @@ app.get('/username/:username', jsonParser, async(req, res) => {
 })
 
 app.post('/game/:gameID', jsonParser, async (req,res) => {
-    if(req.params.gameID) {
-        if(req.body.description) {
-            if(req.body.name) {
-                if(req.body.ageRatings) {
-                    if(req.body.videos) {
-                        if(req.body.coverURL) {
-                            if(req.body.firstReleaseDate) {
-                                if(req.body.franchise) {
-                                    if (req.body.genres) {
-                                        if(req.body.platforms) {
-                                            if(req.body.rating) {
-                                                if(req.body.ratingCount) {
-                                                    if(req.body.screenshots) {
+    if(req.params.gameID || req.params.gameID == "") {
+        if(req.body.description || req.body.description == "") {
+            if(req.body.name || req.body.name == "") {
+                if(req.body.ageRatings || req.body.ageRatings == "") {
+                    if(req.body.videos || req.body.videos == [] || req.body.videos == "") {
+                        if(req.body.coverURL || req.body.coverURL == "") {
+                            if(req.body.firstReleaseDate || req.body.firstReleaseDate == 0) {
+                                if(req.body.franchise || req.body.franchise == "") {
+                                    if (req.body.genres || req.body.firstName == []) {
+                                        if(req.body.platforms || req.body.firstName == []) {
+                                            if(req.body.rating || req.body.rating == 0) {
+                                                if(req.body.ratingCount || req.body.ratingCount == 0) {
+                                                    if(req.body.screenshots || req.body.firstName == []) {
                                                         let gameID = req.params.gameID
                                                         let description = req.body.description
                                                         let name = req.body.name
@@ -288,9 +288,9 @@ app.post('/game/:gameID', jsonParser, async (req,res) => {
 })
 
 app.post('/report-issue', jsonParser, async (req,res) => {
-    if(req.body.userID) {
-        if(req.body.time) {
-            if(req.body.text) {
+    if(req.body.userID || req.body.userID == "") {
+        if(req.body.time || req.body.time == 0) {
+            if(req.body.text || req.body.text == "") {
                 let userID = req.body.userID
                 let reportText = req.body.text
                 let time = req.body.time
@@ -351,13 +351,13 @@ app.post('/report-issue', jsonParser, async (req,res) => {
 })
 
 app.post('/post/:postID', jsonParser, (req,res) => {
-    if(req.params.postID) {
-        if(req.body.time) {
-            if(req.body.text) {
-                if(req.body.userID) {
-                    if(req.body.post_type) {
-                        if(req.body.gameID) {
-                            if(req.body.content) {
+    if(req.params.postID || req.params.postID == "") {
+        if(req.body.time || req.body.time == 0) {
+            if(req.body.text || req.body.text == "") {
+                if(req.body.userID || req.body.userID == "") {
+                    if(req.body.postType || req.body.postType == "") {
+                        if(req.body.gameID || req.body.gameID == "") {
+                            if(req.body.content || req.body.content == "") {
                                 //Add in a check for url, but it does not necessarily need to be here
                                 if(req.body.isComment) {
                                     if (req.body.parentPostID) {
@@ -400,9 +400,9 @@ app.post('/post/:postID', jsonParser, (req,res) => {
 })
 
 app.post('/users/:userID/upvoted-post', jsonParser, (req,res) => {
-    if(req.params.userID) {
-        if(req.body.postID) {
-            if(req.body.text) {
+    if(req.params.userID || req.params.userID == "") {
+        if(req.body.postID || req.body.postID == "") {
+            if(req.body.text || req.body.text == "") {
                 
             //TODO
 
@@ -416,8 +416,8 @@ app.post('/users/:userID/upvoted-post', jsonParser, (req,res) => {
 })
 
 app.post('/users/:userID/followed-game', jsonParser, async (req,res) => {
-    if(req.params.userID) {
-        if(req.body.gameID) {
+    if(req.params.userID || req.params.userID == "") {
+        if(req.body.gameID || req.body.gameID == "") {
             let userID = req.params.userID
             let gameID = req.body.gameID
 
@@ -455,8 +455,8 @@ app.post('/users/:userID/followed-game', jsonParser, async (req,res) => {
 })
 
 app.post('/users/:userID/unfollowed-game', jsonParser, async (req,res) => {
-    if(req.params.userID) {
-        if(req.body.gameID) {
+    if(req.params.userID || req.params.userID == "") {
+        if(req.body.gameID || req.body.gameID == "") {
             let userID = req.params.userID
             let gameID = req.body.gameID
 
@@ -491,8 +491,8 @@ app.post('/users/:userID/unfollowed-game', jsonParser, async (req,res) => {
 })
 
 app.post('/users/:userID/rated-game', jsonParser, async (req,res) => {
-    if(req.params.userID) {
-        if(req.body.gameID) {
+    if(req.params.userID || req.params.userID == "") {
+        if(req.body.gameID || req.body.gameID == "") {
             if(req.body.rating) {
 
                 let userID = req.params.userID
