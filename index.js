@@ -428,7 +428,7 @@ app.post('/users/:userID/followed-game', jsonParser, async (req,res) => {
                 const writeQuery = 
                 `MATCH (u:User),(g:Game)
                 WHERE u.id = \"${userID}\" AND g.id = \"${gameID}\"
-                CREATE (u)-[r:Follows]->(g)
+                MERGE (u)-[r:Follows]->(g)
                 RETURN r`
                    
                 const writeResult = await session.writeTransaction(tx =>
@@ -592,16 +592,20 @@ app.get('/users/:userID/games-followed', jsonParser, async (req,res) => {
 
     try {
 
-        const readQuery = `MATCH (u:User)-[:Follows]->(g:Game) WHERE u.id = '${userID}' RETURN g.id`
+        const readQuery = `MATCH (u:User)-[:Follows]->(g:Game) WHERE u.id = '${userID}' RETURN g.id, g.rating, g.coverURL, g.name`
         const readResult = await session.readTransaction(tx =>
             tx.run(readQuery, {})
         )
         var gamesFollowed = [];
         readResult.records.forEach(record => {
-            //console.log(`Found game: ${record.get('g.id')}`)
-            gamesFollowed.push(record.get('g.id'))
+            let id = record.get('g.id')
+            let rating = record.get('g.rating')
+            let coverURL = record.get('g.coverURL')
+            let name = record.get('g.name')
+            let miniGame = new MiniGame(id, rating, coverURL, name)
+            gamesFollowed.push(miniGame)
         })
-        res.send(gamesFollowed)
+        res.send({"response": gamesFollowed})
     } catch (error) {
         console.error('Something went wrong: ', error)
     } finally {
@@ -612,6 +616,55 @@ app.get('/users/:userID/games-followed', jsonParser, async (req,res) => {
     await driver.close()
 })
 
+app.get('/users/:userID/following', jsonParser, async (req,res) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    const userID = req.params.userID
+
+    try {
+
+        const readQuery = `MATCH (u1:User)-[:Follows]->(u2:User) WHERE u1.id = '${userID}' RETURN u2.id, u2.handle, u2.avatarVal`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var usersFollowed = [];
+        readResult.records.forEach(record => {
+            let id = record.get('u2.id')
+            let handle = record.get('u2.handle')
+            let avatarVal = record.get('u2.avatarVal')
+            let miniProfile = new MiniProfile(id, handle, avatarVal)
+            usersFollowed.push(miniProfile)
+        })
+        res.send({"response": usersFollowed})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
+
 app.listen(port, () => {
     console.log("Server live @ http://localhost:" + port);
 })
+
+class MiniGame {
+    constructor(id, rating, coverURL, name) {
+      this.name = name;
+      this.coverURL = coverURL;
+      this.id = id;
+      this.rating = rating;
+    }
+}
+
+class MiniProfile {
+    constructor(id, handle, avatarVal) {
+        this.handle = handle;
+        this.avatarVal = avatarVal;
+        this.id = id;
+    }
+}
