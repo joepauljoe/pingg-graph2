@@ -23,7 +23,7 @@ app.get('/', (req, res) => {
 app.post('/user/:userID', jsonParser, async (req,res) => {
     if(req.params.userID) {
         if(req.body.handle) {
-            if(req.body.firstName) {
+            if(req.body.fName) {
                 if(req.body.lastName) {
                     if(req.body.screenNames) {
                         if(req.body.ping) {
@@ -32,7 +32,7 @@ app.post('/user/:userID', jsonParser, async (req,res) => {
                                     if(req.body.avatarVal) {
                                         let userID = req.params.userID
                                         let handle = req.body.handle
-                                        let fName = req.body.firstName
+                                        let fName = req.body.fName
                                         let lName = req.body.lastName
                                         let screenNames = req.body.screenNames
                                         let ping = req.body.ping
@@ -86,7 +86,7 @@ app.post('/user/:userID', jsonParser, async (req,res) => {
                     res.send(result)
                 }
             } else {
-                var result = {"response": "Missing firstName field"}
+                var result = {"response": "Missing fName field"}
                 res.send(result)
             }
         } else {
@@ -123,11 +123,12 @@ app.get('/user/:userID', jsonParser, async(req, res) => {
             let response = {"response": users[0]}
             res.send(response)
         } else {
-            let reponse = {"response": "No users found"}
+            let response = {"response": "No users found"}
             res.send(response)
         }
         
     } catch (error) {
+        res.send(error)
         console.error('Something went wrong: ', error)
     } finally {
         await session.close()
