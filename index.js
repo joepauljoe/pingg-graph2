@@ -3,10 +3,12 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const neo4j = require('neo4j-driver');
 const { v4: uuidv4 } = require('uuid');
+const fs = require("fs");
 
-const uri = 'neo4j+s://eed42c14.databases.neo4j.io';
-const user = 'Almost had it';
-const password = 'You wish! LOL';
+const uri = 'neo4j+s://6353106d.databases.neo4j.io'
+const json = JSON.parse(fs.readFileSync('secrets.json'))
+const user = json.username;
+const password = json.password;
 
 var app = express();
 const port = process.env.PORT || 9000;
