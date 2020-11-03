@@ -24,7 +24,7 @@ app.post('/user/:userID', jsonParser, async (req,res) => {
     if(req.params.userID) {
         if(req.body.handle) {
             if(req.body.fName) {
-                if(req.body.lastName) {
+                if(req.body.lName) {
                     if(req.body.screenNames) {
                         if(req.body.ping) {
                             if(req.body.latitude) {
@@ -33,7 +33,7 @@ app.post('/user/:userID', jsonParser, async (req,res) => {
                                         let userID = req.params.userID
                                         let handle = req.body.handle
                                         let fName = req.body.fName
-                                        let lName = req.body.lastName
+                                        let lName = req.body.lName
                                         let screenNames = req.body.screenNames
                                         let ping = req.body.ping
                                         let latitude = req.body.latitude
@@ -44,7 +44,7 @@ app.post('/user/:userID', jsonParser, async (req,res) => {
                                         const session = driver.session();
                         
                                         try {
-                                            const writeQuery = `MERGE (u1:User { id: $userID, handle: $handle, fname: $fName, lname: $lName, screenNames: $screenNames, ping: $ping, latitude: $latitude, longitude: $longitude, avatarVal: $avatarVal })
+                                            const writeQuery = `MERGE (u1:User { id: $userID, handle: $handle, fName: $fName, lName: $lName, screenNames: $screenNames, ping: $ping, latitude: $latitude, longitude: $longitude, avatarVal: $avatarVal })
                                                                 RETURN u1`
                                             
                                             const writeResult = await session.writeTransaction(tx =>
@@ -82,7 +82,7 @@ app.post('/user/:userID', jsonParser, async (req,res) => {
                         res.send(result)
                     }
                 } else {
-                    var result = {"response": "Missing lastName field"}
+                    var result = {"response": "Missing lName field"}
                     res.send(result)
                 }
             } else {
