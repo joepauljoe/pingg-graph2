@@ -1,6 +1,3 @@
-//username: neo4j
-//password: iT4_PDxKBM9MaJkmeEMUQPxP28mfkxdRfdglUFNdaLY
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -8,8 +5,8 @@ const neo4j = require('neo4j-driver');
 const { v4: uuidv4 } = require('uuid');
 
 const uri = 'neo4j+s://eed42c14.databases.neo4j.io';
-const user = 'neo4j';
-const password = 'iT4_PDxKBM9MaJkmeEMUQPxP28mfkxdRfdglUFNdaLY';
+const user = 'Almost had it';
+const password = 'You wish! LOL';
 
 var app = express();
 const port = process.env.PORT || 9000;
