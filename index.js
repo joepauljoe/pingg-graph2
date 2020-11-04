@@ -647,6 +647,128 @@ app.get('/users/:userID/following', jsonParser, async (req,res) => {
     await driver.close()
 })
 
+app.get('/users/:userID/followers', jsonParser, async (req,res) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    const userID = req.params.userID
+
+    try {
+
+        const readQuery = `MATCH (u1:User)-[:Follows]->(u2:User) WHERE u2.id = '${userID}' RETURN u1.id, u1.handle, u1.avatarVal`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var usersFollowed = [];
+        readResult.records.forEach(record => {
+            let id = record.get('u1.id')
+            let handle = record.get('u1.handle')
+            let avatarVal = record.get('u1.avatarVal')
+            let miniProfile = new MiniProfile(id, handle, avatarVal)
+            usersFollowed.push(miniProfile)
+        })
+        res.send({"response": usersFollowed})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
+app.get('/users/:userID/followed-user/:followeeID', jsonParser, async (req,res) => {
+    if(req.params.userID) {
+        if(req.params.followeeID) {
+            let followerID = req.params.userID
+            let followeeID = req.params.followeeID
+
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+            const session = driver.session();
+
+            try {
+                const writeQuery = 
+                `MATCH (u1:User),(u2:User)
+                WHERE u1.id = \"${followerID}\" AND u2.id = \"${followeeID}\"
+                MERGE (u1)-[r:Follows]->(u2)
+                RETURN r`
+                   
+                const writeResult = await session.writeTransaction(tx =>
+                    tx.run(writeQuery, {})
+                )
+                    
+            } catch (error) {
+                console.error('Something went wrong: ', error)
+                res.send(error)
+            } finally {
+                var result = {"response": "Success!"}
+                res.send(result)
+                await session.close()
+            }
+
+            await driver.close()
+
+        } else {
+            res.send("Missing time field");
+        }
+    } else {
+        res.send("Missing userID field");
+    }
+})
+
+app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req,res) => {
+    if(req.params.userID) {
+        if(req.body.gameID) {
+            let userID = req.params.userID
+            let followeeID = req.params.followeeID
+
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+            const session = driver.session();
+
+            try {
+                const writeQuery = 
+                `MATCH (u1:User { id: '${userID}' })-[r:Follows]->(u2:User {id: '${followeeID}'}) DELETE r`
+                   
+                const writeResult = await session.writeTransaction(tx =>
+                    tx.run(writeQuery, {})
+                )
+                    
+            } catch (error) {
+                console.error('Something went wrong: ', error)
+                res.send(error)
+            } finally {
+                var result = {"response": "Success!"}
+                res.send(result)
+                await session.close()
+            }
+
+            await driver.close()
+
+        } else {
+            res.send("Missing time field");
+        }
+    } else {
+        res.send("Missing userID field");
+    }
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 app.listen(port, () => {
     console.log("Server live @ http://localhost:" + port);
