@@ -4,6 +4,19 @@ const cors = require('cors');
 const neo4j = require('neo4j-driver');
 const { v4: uuidv4 } = require('uuid');
 const fs = require("fs");
+const winston = require('winston');
+const {LoggingWinston} = require('@google-cloud/logging-winston');
+const loggingWinston = new LoggingWinston();
+const logger = winston.createLogger({
+    level: 'info',
+    transports: [
+      new winston.transports.Console(),
+      // Add Stackdriver Logging
+      loggingWinston,
+    ],
+  });
+  
+
 
 const uri = 'neo4j+s://6353106d.databases.neo4j.io'
 const json = JSON.parse(fs.readFileSync('secrets.json'))
@@ -457,16 +470,15 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
                                                             res.send({"response": "Please include the parentPostID field"})
                                                         }
                                                     } else {
-                                                        
                                                         const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
                                                         const session = driver.session();
 
                                                         try {
-                                                            const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, numUpvotes: 0})
+                                                            const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, imagePath: $imagePath, numUpvotes: 0})
                                                                                 RETURN p`
                                                             
                                                             const writeResult = await session.writeTransaction(tx =>
-                                                                tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL})
+                                                                tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL, imagePath})
                                                             )
                                                                 
                                                         } catch (error) {
@@ -506,7 +518,7 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
                                                             const writeResult = await session3.writeTransaction(tx =>
                                                                 tx.run(writeQuery2, {})
                                                             )
-                                                                
+                                                            
                                                         } catch (error) {
                                                             console.error('Something went wrong: ', error)
                                                         } finally {
