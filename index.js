@@ -1099,7 +1099,6 @@ app.get('/posts/game/:gameID', jsonParser, async(req, res) => {
 })
 
 app.get('/posts', jsonParser, async(req, res) => {
-    var gameID = req.params.gameID
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
@@ -1309,6 +1308,33 @@ app.post('/user/:userID/update-ping', jsonParser, async(req, res) => {
     
 })
 
+app.get('/map/points', jsonParser, async(req, res) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (u:User) RETURN u`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var mapObjects = [];
+        readResult.records.forEach(record => {
+            var user = (record.get('u'))
+            var returnObject = new MapObject(user.properties.latitude, user.properties.longitude, user.properties.ping)
+            mapObjects.push(returnObject)
+        })
+        res.send({"response": mapObjects})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
 app.listen(port, () => {
     console.log("Server live @ http://localhost:" + port);
 })
@@ -1339,5 +1365,13 @@ class Post {
         this.id = id;
         this.user = user;
         this.game = game;
+    }
+}
+
+class MapObject {
+    constructor(latitude, longitude, ping) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.ping = ping;
     }
 }
