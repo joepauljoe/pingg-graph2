@@ -374,8 +374,14 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
                                                     let gameName = req.body.game.name
                                                     let rating = req.body.game.rating
                                                     let imageURL = ""
+                                                    let imagePath = ""
                                                     if(req.body.imageURL) {
-                                                        imageURL = req.body.image
+                                                        if(req.body.imagePath) {
+                                                            imageURL = req.body.image
+                                                            imagePath = req.body.imagePath
+                                                        } else {
+                                                            res.send({"response": "Please include imagePath field"})
+                                                        }
                                                     }
 
                                                     if(req.body.isComment) {
@@ -386,11 +392,11 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
                                                             const session = driver.session();
 
                                                             try {
-                                                                const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, numUpvotes: 0})
+                                                                const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, imagePath: $imagePath, numUpvotes: 0})
                                                                                     RETURN p`
                                                                 
                                                                 const writeResult = await session.writeTransaction(tx =>
-                                                                    tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL})
+                                                                    tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL, imagePath})
                                                                 )
                                                                     
                                                             } catch (error) {
@@ -1051,6 +1057,64 @@ app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req,res
     }
 })
 
+app.get('/posts/:gameID', jsonParser, async(req, res) => {
+    var gameID = req.params.gameID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (p:Post)-[:PostOf]->(g:Game) WHERE g.id = '${gameID}' RETURN p`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var posts = [];
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+        res.send({"response": posts})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
+app.get('/posts/comments/:parentID', jsonParser, async(req, res) => {
+    var parentID = req.params.parentID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (p1:Post)-[:CommentOf]->(p2:Post) WHERE p2.id = '${parentID}' RETURN p1`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var posts = [];
+        readResult.records.forEach(record => {
+            var post = (record.get('p1'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+        res.send({"response": posts})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
 app.listen(port, () => {
     console.log("Server live @ http://localhost:" + port);
 })
@@ -1069,5 +1133,17 @@ class MiniProfile {
         this.handle = handle;
         this.avatarVal = avatarVal;
         this.id = id;
+    }
+}
+
+class Post {
+    constructor(text, imageURL, imagePath, time, id, user, game) {
+        this.text = text;
+        this.imageURL = imageURL;
+        this.imagePath = imagePath;
+        this.time = time;
+        this.id = id;
+        this.user = user;
+        this.game = game;
     }
 }
