@@ -350,52 +350,203 @@ app.post('/report-issue', jsonParser, async (req,res) => {
     }
 })
 
-app.post('/post/:postID', jsonParser, (req,res) => {
-    if(req.params.postID || req.params.postID == "") {
-        if(req.body.time || req.body.time == 0) {
-            if(req.body.text || req.body.text == "") {
-                if(req.body.userID || req.body.userID == "") {
-                    if(req.body.postType || req.body.postType == "") {
-                        if(req.body.gameID || req.body.gameID == "") {
-                            if(req.body.content || req.body.content == "") {
-                                //Add in a check for url, but it does not necessarily need to be here
-                                if(req.body.isComment) {
-                                    if (req.body.parentPostID) {
-                                        // Add as a comment
+app.post('/post/:postID', jsonParser, async (req,res) => {
+    if(req.params.postID) {
+        if(req.body.time) {
+            if(req.body.text) {
+                if(req.body.user) {
+                    if(req.body.user.avatarVal) {
+                        if(req.body.user.handle) {
+                            if(req.body.user.id) {
+                                if(req.body.game) {
+                                    if(req.body.game.name) {
+                                        if(req.body.game.id) {
+                                            if(req.body.game.coverURL) {
+                                                if(req.body.game.rating) {
+                                                    let postID = req.params.postID
+                                                    let time = req.body.time
+                                                    let text = req.body.text
+                                                    let avatarVal = req.body.user.avatarVal
+                                                    let userID = req.body.user.id.toString()
+                                                    let handle = req.body.user.handle
+                                                    let gameID = req.body.game.id
+                                                    let coverURL = req.body.game.coverURL
+                                                    let gameName = req.body.game.name
+                                                    let rating = req.body.game.rating
+                                                    let imageURL = ""
+                                                    if(req.body.imageURL) {
+                                                        imageURL = req.body.image
+                                                    }
+
+                                                    if(req.body.isComment) {
+                                                        if(req.body.parentPostID) {
+                                                            let parentPostID = req.body.parentPostID
+
+                                                            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+                                                            const session = driver.session();
+
+                                                            try {
+                                                                const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, numUpvotes: 0})
+                                                                                    RETURN p`
+                                                                
+                                                                const writeResult = await session.writeTransaction(tx =>
+                                                                    tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL})
+                                                                )
+                                                                    
+                                                            } catch (error) {
+                                                                console.error('Something went wrong: ', error)
+                                                            } finally {
+                                                                await session.close()
+                                                            }
+
+                                                            const session2 = driver.session();
+
+                                                            try {
+                                                                const writeQuery2 = 
+                                                                `MATCH (u:User),(p:Post)
+                                                                WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
+                                                                CREATE (u)-[r1:Posted]->(p)
+                                                                RETURN r1`
+                                                                
+                                                                const writeResult = await session2.writeTransaction(tx =>
+                                                                    tx.run(writeQuery2, {})
+                                                                )
+                                                                    
+                                                            } catch (error) {
+                                                                console.error('Something went wrong: ', error)
+                                                            } finally {
+                                                                await session2.close()
+                                                            }
+
+                                                            const session3 = driver.session();
+
+                                                            try {
+                                                                const writeQuery2 = 
+                                                                `MATCH (p1:Post),(p2:Post)
+                                                                WHERE p1.id = \"${postID}\" AND p2.id = \"${parentPostID}\"
+                                                                CREATE (p1)-[r1:CommentOf]->(p2)
+                                                                RETURN r1`
+                                                                
+                                                                const writeResult = await session3.writeTransaction(tx =>
+                                                                    tx.run(writeQuery2, {})
+                                                                )
+                                                                    
+                                                            } catch (error) {
+                                                                console.error('Something went wrong: ', error)
+                                                            } finally {
+                                                                var result = {"response": "Success!"}
+                                                                res.send(result)
+                                                                await session3.close()
+                                                            }
+
+                                                            await driver.close()
 
 
 
 
-                                    } else { 
-                                        res.sendStatus("Missing missing parentPostID field")
+
+
+
+                                                        } else {
+                                                            res.send({"response": "Please include the parentPostID field"})
+                                                        }
+                                                    } else {
+                                                        
+                                                        const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+                                                        const session = driver.session();
+
+                                                        try {
+                                                            const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, numUpvotes: 0})
+                                                                                RETURN p`
+                                                            
+                                                            const writeResult = await session.writeTransaction(tx =>
+                                                                tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL})
+                                                            )
+                                                                
+                                                        } catch (error) {
+                                                            console.error('Something went wrong: ', error)
+                                                        } finally {
+                                                            await session.close()
+                                                        }
+
+                                                        const session2 = driver.session();
+
+                                                        try {
+                                                            const writeQuery2 = 
+                                                            `MATCH (u:User),(p:Post)
+                                                            WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
+                                                            CREATE (u)-[r1:Posted]->(p)
+                                                            RETURN r1`
+                                                            
+                                                            const writeResult = await session2.writeTransaction(tx =>
+                                                                tx.run(writeQuery2, {})
+                                                            )
+                                                                
+                                                        } catch (error) {
+                                                            console.error('Something went wrong: ', error)
+                                                        } finally {
+                                                            await session2.close()
+                                                        }
+
+                                                        const session3 = driver.session();
+
+                                                        try {
+                                                            const writeQuery2 = 
+                                                            `MATCH (p:Post),(g:Game)
+                                                            WHERE g.id = \"${gameID}\" AND p.id = \"${postID}\"
+                                                            CREATE (p)-[r1:PostOf]->(g)
+                                                            RETURN r1`
+                                                            
+                                                            const writeResult = await session3.writeTransaction(tx =>
+                                                                tx.run(writeQuery2, {})
+                                                            )
+                                                                
+                                                        } catch (error) {
+                                                            console.error('Something went wrong: ', error)
+                                                        } finally {
+                                                            var result = {"response": "Success!"}
+                                                            res.send(result)
+                                                            await session3.close()
+                                                        }
+
+                                                        await driver.close()
+
+                                                    }
+                                                } else {
+                                                    res.send({"response": "Please include game.rating field"})
+                                                }
+                                            } else {
+                                                res.send({"response": "Please include game.coverURL field"})
+                                            }
+                                        } else {
+                                            res.send({"response": "Please include game.id field"})
+                                        }
+                                    } else {
+                                        res.send({"response": "Please include game.name field"})
                                     }
                                 } else {
-                                    // Make standalone post
-
-
-
-                                    
+                                    res.send({"response": "Please include game field"})
                                 }
                             } else {
-                                res.sendStatus("Missing content field")
+                                res.send({"response": "Please include user.id field"})
                             }
                         } else {
-                            res.sendStatus("Missing channelID field")
+                            res.send({"response": "Please include user.handle field"})
                         }
                     } else {
-                        res.sendStatus("Missing postType field")
+                        res.send({"response": "Please include user.avatarVal field"})
                     }
                 } else {
-                    res.sendStatus("Missing userID field")
+                    res.send({"response": "Please include user field"})
                 }
             } else {
-                res.send("Missing text field");
+                res.send({"response": "Please include text field"})
             }
         } else {
-            res.send("Missing time field");
+            res.send({"response": "Please include time field"})
         }
     } else {
-        res.send("Missing postID field");
+        res.send({"response": "Please include postID field"})
     }
 })
 
