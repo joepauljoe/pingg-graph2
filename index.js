@@ -1156,6 +1156,92 @@ app.get('/posts/user/:userID', jsonParser, async(req, res) => {
     await driver.close()
 })
 
+app.get('/posts/personalized/:userID', jsonParser, async(req, res) => {
+    var userID = req.params.userID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+    var posts = [];
+
+    try {
+
+        const readQuery = `MATCH (u1:User)-[r1:Follows]->(u2:User)-[r2:Posted]->(p:Post)-[r3:PostOf]->(g:Game) WHERE u2.id = '${userID}' RETURN p`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    const session4 = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (u1:User)-[r1:Posted]->(p:Post)-[r2:PostOf]->(g:Game) WHERE u1.id = '${userID}' RETURN p`
+        const readResult = await session4.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session4.close()
+    }
+
+    const session2 = driver.session()
+    var gameID = ''
+    try {
+
+        const readQuery = `MATCH (u:User)-[r1:Follows]->(g:Game) WHERE u.id = '${userID}' RETURN g.id`
+        const readResult = await session2.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        readResult.records.forEach(record => {
+           gameID = record.get('g.id')
+        })
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session2.close()
+    }
+
+    const session3 = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (p:Post)-[r:PostOf]->(g:Game) WHERE g.id = '${gameID}' RETURN p`
+        const readResult = await session3.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+        res.send({"response": posts.sort((a, b) => b.time - a.time)})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session3.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
 app.get('/posts/comments/:parentID', jsonParser, async(req, res) => {
     var parentID = req.params.parentID
 
