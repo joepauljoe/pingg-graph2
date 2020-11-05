@@ -550,16 +550,163 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
     }
 })
 
-app.post('/users/:userID/upvoted-post', jsonParser, (req,res) => {
+app.post('/users/:userID/upvoted-post', jsonParser, async (req,res) => {
     if(req.params.userID || req.params.userID == "") {
         if(req.body.postID || req.body.postID == "") {
-            if(req.body.text || req.body.text == "") {
+            let postID = req.body.postID
+            let userID = req.params.userID
                 
-            //TODO
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+            const session = driver.session()
 
+            var oldUpvoteCount = 0
+            var newUpvoteCount = 0
+
+            try {
+
+                const readQuery = `match (p:Post) where p.id = "${postID}" return p.numUpvotes`
+                const readResult = await session.readTransaction(tx =>
+                    tx.run(readQuery, {})
+                )
+                readResult.records.forEach(record => {
+                    oldUpvoteCount = (record.get('p.numUpvotes'))
+                })
+                    
+                newUpvoteCount = parseInt(oldUpvoteCount) + 1
+            } catch (error) {
+                console.error('Something went wrong: ', error)
+            } finally {
+                await session.close()
             }
-        } else {
-            res.send("Missing postID field");
+
+
+
+
+            const session2 = driver.session();
+
+            try {
+                const writeQuery = 
+                `MATCH (p:Post { id: '${postID}' }) SET p.numUpvotes = ${newUpvoteCount}
+                RETURN p`
+                       
+                const writeResult = await session2.writeTransaction(tx =>
+                    tx.run(writeQuery, {})
+                )
+                        
+            } catch (error) {
+                var result = {"response": "Unknown Error Occurred"}
+            } finally {
+                await session2.close()
+            }
+
+            const session3 = driver.session();
+
+            try {
+                const writeQuery2 = 
+                `MATCH (u:User),(p:Post)
+                WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
+                CREATE (u)-[r1:Upvoted]->(p)
+                RETURN r1`
+                       
+                const writeResult = await session3.writeTransaction(tx =>
+                    tx.run(writeQuery2, {})
+                )
+                        
+            } catch (error) {
+                console.error('Something went wrong: ', error)
+                var result = {"response": "Unknown Error Occurred"}
+                res.send(result)
+            } finally {
+                var result = {"newUpvoteCount": newUpvoteCount}
+                res.send(result)
+                await session3.close()
+            }
+
+            // Don't forget to close the driver connection when you're finished with it
+            await driver.close()
+
+        }
+    } else {
+        res.send("Missing userID field");
+    }
+})
+
+app.post('/users/:userID/downvoted-post', jsonParser, async (req,res) => {
+    if(req.params.userID || req.params.userID == "") {
+        if(req.body.postID || req.body.postID == "") {
+            let postID = req.body.postID
+            let userID = req.params.userID
+                
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+            const session = driver.session()
+
+            var oldUpvoteCount = 0
+            var newUpvoteCount = 0
+
+            try {
+
+                const readQuery = `match (p:Post) where p.id = "${postID}" return p.numUpvotes`
+                const readResult = await session.readTransaction(tx =>
+                    tx.run(readQuery, {})
+                )
+                readResult.records.forEach(record => {
+                    oldUpvoteCount = (record.get('p.numUpvotes'))
+                })
+                    
+                newUpvoteCount = parseInt(oldUpvoteCount) - 1
+            } catch (error) {
+                console.error('Something went wrong: ', error)
+            } finally {
+                await session.close()
+            }
+
+
+
+
+            const session2 = driver.session();
+
+            try {
+                const writeQuery = 
+                `MATCH (p:Post { id: '${postID}' }) SET p.numUpvotes = ${newUpvoteCount}
+                RETURN p`
+                       
+                const writeResult = await session2.writeTransaction(tx =>
+                    tx.run(writeQuery, {})
+                )
+                        
+            } catch (error) {
+                var result = {"response": "Unknown Error Occurred"}
+            } finally {
+                await session2.close()
+            }
+
+            const session3 = driver.session();
+
+            try {
+                const writeQuery2 = 
+                `MATCH (u:User),(p:Post)
+                WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
+                MATCH (u)-[r1:Upvoted]->(p)
+                DELETE r1
+                RETURN r1`
+                       
+                const writeResult = await session3.writeTransaction(tx =>
+                    tx.run(writeQuery2, {})
+                )
+                        
+            } catch (error) {
+                console.error('Something went wrong: ', error)
+                var result = {"response": "Unknown Error Occurred"}
+                res.send(result)
+            } finally {
+                var result = {"newUpvoteCount": newUpvoteCount}
+                res.send(result)
+                await session3.close()
+            }
+
+            // Don't forget to close the driver connection when you're finished with it
+            await driver.close()
+
         }
     } else {
         res.send("Missing userID field");
@@ -685,7 +832,7 @@ app.post('/users/:userID/rated-game', jsonParser, async (req,res) => {
 
                 try {
                     const writeQuery = 
-                    `MATCH (g:Game { id: '${gameID}' }) SET g.rating = ${newRating}
+                    `MATCH (g:Game { id: '${gameID}' }) SET g.rating = ${newRating}, g.ratingCount = ${newRatingCount}
                     RETURN g`
                        
                     const writeResult = await session2.writeTransaction(tx =>
@@ -903,23 +1050,6 @@ app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req,res
         res.send("Missing userID field");
     }
 })
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 app.listen(port, () => {
     console.log("Server live @ http://localhost:" + port);
