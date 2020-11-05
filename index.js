@@ -834,8 +834,8 @@ app.post('/users/:userID/rated-game', jsonParser, async (req,res) => {
                         ratingCounts.push(record.get('g.ratingCount'))
                     })
                     
-                    let oldTotalRating = ratings[0] * ratingCounts[0]
-                    newRatingCount = ratingCounts[0] + 1
+                    let oldTotalRating = ratings[0] * parseInt(ratingCounts[0])
+                    newRatingCount = parseInt(ratingCounts[0]) + 1
                     newRating = (oldTotalRating + rating) / newRatingCount
                 } catch (error) {
                     console.error('Something went wrong: ', error)
