@@ -1069,7 +1069,7 @@ app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req,res
     }
 })
 
-app.get('/posts/:gameID', jsonParser, async(req, res) => {
+app.get('/posts/game/:gameID', jsonParser, async(req, res) => {
     var gameID = req.params.gameID
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
@@ -1098,6 +1098,35 @@ app.get('/posts/:gameID', jsonParser, async(req, res) => {
     await driver.close()
 })
 
+app.get('/posts', jsonParser, async(req, res) => {
+    var gameID = req.params.gameID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (p:Post)-[:PostOf]->(g:Game) RETURN p ORDER BY p.time DESC`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var posts = [];
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+        res.send({"response": posts})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+    
 app.get('/posts/user/:userID', jsonParser, async(req, res) => {
     var userID = req.params.userID
 
@@ -1154,6 +1183,44 @@ app.get('/posts/comments/:parentID', jsonParser, async(req, res) => {
 
     // Don't forget to close the driver connection when you're finished with it
     await driver.close()
+})
+
+app.post('/user/:userID/update-ping', jsonParser, async(req, res) => {
+    if (req.params.userID){
+        if (req.body.ping) {
+            let userID = req.params.userID
+            let ping = req.body.ping
+
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+            const session2 = driver.session();
+
+            try {
+                const writeQuery = 
+                `MATCH (u:User { id: '${userID}' }) SET u.ping = ${ping}
+                RETURN u`
+                   
+                const writeResult = await session2.writeTransaction(tx =>
+                    tx.run(writeQuery, {})
+                )
+                    
+            } catch (error) {
+                console.log(error)
+                var result = {"response": "Unknown Error Occurred"}
+                res.send(result)
+            } finally {
+                var result = {"response": "Success!"}
+                res.send(result)
+                await session2.close()
+            }
+
+            driver.close()
+        } else {
+            res.send({"resposne": "Please include the ping field"})
+        }
+    } else {
+        res.send({"resposne": "Please include the userID field"})
+    }
+    
 })
 
 app.listen(port, () => {
