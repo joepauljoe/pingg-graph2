@@ -1077,7 +1077,36 @@ app.get('/posts/:gameID', jsonParser, async(req, res) => {
 
     try {
 
-        const readQuery = `MATCH (p:Post)-[:PostOf]->(g:Game) WHERE g.id = '${gameID}' RETURN p`
+        const readQuery = `MATCH (p:Post)-[:PostOf]->(g:Game) WHERE g.id = '${gameID}' RETURN p ORDER BY p.time DESC`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var posts = [];
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            posts.push(returnPost)
+        })
+        res.send({"response": posts})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
+app.get('/posts/user/:userID', jsonParser, async(req, res) => {
+    var userID = req.params.userID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (u:User)-[:Posted]->(p:Post)-[:PostOf]->(g:Game) WHERE u.id = '${userID}' RETURN p ORDER BY p.time DESC`
         const readResult = await session.readTransaction(tx =>
             tx.run(readQuery, {})
         )
