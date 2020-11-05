@@ -390,7 +390,7 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
                                                     let imagePath = ""
                                                     if(req.body.imageURL) {
                                                         if(req.body.imagePath) {
-                                                            imageURL = req.body.image
+                                                            imageURL = req.body.imageURL
                                                             imagePath = req.body.imagePath
                                                         } else {
                                                             res.send({"response": "Please include imagePath field"})
