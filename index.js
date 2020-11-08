@@ -4,6 +4,7 @@ const cors = require('cors');
 const neo4j = require('neo4j-driver');
 const { v4: uuidv4 } = require('uuid');
 const fs = require("fs");
+const readline = require('readline');
 const winston = require('winston');
 const {LoggingWinston} = require('@google-cloud/logging-winston');
 const loggingWinston = new LoggingWinston();
@@ -14,7 +15,18 @@ const logger = winston.createLogger({
       // Add Stackdriver Logging
       loggingWinston,
     ],
-  });
+});
+const readInterface = readline.createInterface({
+    input: fs.createReadStream('bad-words.txt'),
+    console: false
+});
+
+var badWordsSet = new Set()
+readInterface.on('line', function(line) {
+    badWordsSet.add(line)
+});
+
+
   
 
 
@@ -128,7 +140,6 @@ app.get('/user/:userID', jsonParser, async(req, res) => {
         
 
         readResult.records.forEach(record => {
-            console.log(typeof record.get('u'))
             users.push(record.get('u'))
         })
         if(users.length > 0) {
@@ -152,34 +163,48 @@ app.get('/user/:userID', jsonParser, async(req, res) => {
 })
 
 app.get('/usernames/:username', jsonParser, async(req, res) => {
-    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-    const session = driver.session()
 
     const username = req.params.username
+    var hasBadWord = false
+    var lowerCasedUsername = username.toLowerCase()
 
-    try {
-
-        const readQuery = `match (u:User) where u.handle = "${username.toString()}" return u`
-        const readResult = await session.readTransaction(tx =>
-            tx.run(readQuery, {})
-        )
-        
-
-        if (readResult.records.length == 0) {
-            var result = {"response": "No users with this name."}
-            res.send(result)
-        } else {
-            var result = {"response": "This username is already taken."}
-            res.send(result)
+    badWordsSet.forEach(badWord => {
+        if(lowerCasedUsername.includes(badWord)) {
+            hasBadWord = true
         }
-    } catch (error) {
-        console.error('Something went wrong: ', error)
-    } finally {
-        await session.close()
-    }
+    })
 
-    // Don't forget to close the driver connection when you're finished with it
-    await driver.close()
+
+    if(hasBadWord) {
+        var result = {"response": "This username contains a prohibited word."}
+        res.send(result)
+    } else {
+        try {
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+            const session = driver.session()
+
+            const readQuery = `match (u:User) where u.handle = "${username.toString()}" return u`
+            const readResult = await session.readTransaction(tx =>
+                tx.run(readQuery, {})
+            )
+            
+
+            if (readResult.records.length == 0) {
+                var result = {"response": "No users with this name."}
+                res.send(result)
+            } else {
+                var result = {"response": "This username is already taken."}
+                res.send(result)
+            }
+        } catch (error) {
+            console.error('Something went wrong: ', error)
+        } finally {
+            await session.close()
+        }
+
+        // Don't forget to close the driver connection when you're finished with it
+        await driver.close()
+    }
 })
 
 app.get('/username/:username', jsonParser, async(req, res) => {
@@ -196,7 +221,6 @@ app.get('/username/:username', jsonParser, async(req, res) => {
             tx.run(readQuery, {})
         )
         readResult.records.forEach(record => {
-            console.log(typeof record.get('u'))
             users.push(record.get('u'))
         })
 
@@ -243,7 +267,7 @@ app.post('/game/:gameID', jsonParser, async (req,res) => {
                                                         const session = driver.session();
                                         
                                                         try {
-                                                            const writeQuery = `CREATE (g:Game { id: $gameID, description: $description, name: $name, ageRatings: $ageRatings, videos: $videos, coverURL: $coverURL, firstReleaseDate: $firstReleaseDate, franchise: $franchise, genres: $genres, platforms: $platforms, rating: $rating, ratingCount: $ratingCount, screenshots: $screenshots })
+                                                            const writeQuery = `MERGE (g:Game { id: $gameID, description: $description, name: $name, ageRatings: $ageRatings, videos: $videos, coverURL: $coverURL, firstReleaseDate: $firstReleaseDate, franchise: $franchise, genres: $genres, platforms: $platforms, rating: $rating, ratingCount: $ratingCount, screenshots: $screenshots })
                                                                                 RETURN g`
                                                             
                                                             const writeResult = await session.writeTransaction(tx =>
@@ -395,6 +419,22 @@ app.post('/post/:postID', jsonParser, async (req,res) => {
                                                         } else {
                                                             res.send({"response": "Please include imagePath field"})
                                                         }
+                                                    }
+                                                    var textArray = text.split(' ')
+                                                    for(var i =0; i < textArray.length; i++){
+                                                        badWordsSet.forEach(badWord => {
+                                                            if(textArray[i].includes(badWord)) {
+                                                                var newText = ''
+                                                                for(var j=0; j<textArray[i].length; j++) {
+                                                                    newText += '*'
+                                                                }
+                                                                textArray[i] = newText
+                                                            }
+                                                        })
+                                                    }
+                                                    text = ''
+                                                    for(var i=0; i<textArray.length; i++) {
+                                                        text += textArray[i] + ' '
                                                     }
 
                                                     if(req.body.isComment) {
