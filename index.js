@@ -6,9 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require("fs");
 const readline = require('readline');
 const winston = require('winston');
-const cheerio = require('cheerio');
 const getUrls = require('get-urls');
-const fetch = require('node-fetch');
 const puppeteer = require('puppeteer');
 const { LoggingWinston } = require('@google-cloud/logging-winston');
 const loggingWinston = new LoggingWinston();
@@ -31,70 +29,6 @@ readInterface.on('line', function (line) {
     badWordsSet.add(line)
 });
 
-const scrapteMetatags = async (text) => {
-    const urls = Array.from(getUrls(text));
-    const requests = urls.map(async url => {
-        const browser = await puppeteer.launch({ headless: true });
-        const page = await browser.newPage();
-        let desired = ['title', 'site_name', 'description', 'image', 'author', 'favicon']
-
-        await page.goto(url);
-
-        await page.screenshot({ path: 'url.png' })
-
-        await page.waitForSelector('head > meta ', {});
-
-        var meta = {}
-        meta["title"] = await page.title()
-        meta["url"] = url
-
-        try {
-            var data = await page.$eval("head > meta[name='description']", element => element.content)
-            meta["description"] = data
-        } catch (error) {
-            try {
-                var data = await page.$eval("body > meta[name='description']", element => element.content)
-                meta["description"] = data
-            } catch (error) {
-                console.log("No description")
-            }
-        }
-
-        try {
-            var data = await page.$eval("head > meta[property='og:image']", element => element.content)
-            if(data[0] === "/") {
-                data = url + data
-            }
-            meta["image"] = data
-        } catch {
-            try {
-                var data = await page.$eval("body > meta[property='og:image']", element => element.content)
-                if(data[0] === "/") {
-                    data = url + data
-                }
-                meta["image"] = data
-            } catch {
-                try {
-                    var data = await page.$eval('link[rel="shortcut icon"]', element => element.href)
-                    if(data[0] === "/") {
-                        data = url + data
-                    }
-                    meta["favicon"] = data
-                } catch {
-                   console.log("No image")
-                }
-            }
-        }
-
-        await browser.close()
-        return meta
-    })
-
-    return Promise.all(requests);
-}
-
-
-
 const uri = 'neo4j+s://6353106d.databases.neo4j.io'
 const json = JSON.parse(fs.readFileSync('secrets.json'))
 const user = json.username;
@@ -106,11 +40,43 @@ var jsonParser = bodyParser.json()
 
 app.use(cors());
 
-app.get('/', (req, res) => {
+app.get('/', (req, res, next) => {
     res.send('Hello World!')
 })
 
-app.post('/user/:userID', jsonParser, async (req, res) => {
+app.post('/user/:userID/update', jsonParser, async (req, res, next) => {
+    let userID = req.params.userID
+    console.log(userID)
+    if(req.body.fields) {
+        let keys = Object.keys(req.body.fields)
+        keys.forEach( async key => {
+            console.log(key)
+            console.log(req.body.fields[key])
+            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+            const session = driver.session()
+
+            try {
+                const session = driver.session()
+                const writeQuery =
+                    `MATCH (u:User { id: '${userID}' }) SET u.${key} = '${req.body.fields[key]}'
+                RETURN u`
+    
+                const writeResult = await session.writeTransaction(tx =>
+                    tx.run(writeQuery, {})
+                )
+    
+            } catch (error) {
+                console.log(error)
+            } finally {
+                await session.close()
+                await driver.close()
+            }
+        })
+        res.send({"response": "success!"})
+    }
+})
+
+app.post('/user/:userID', jsonParser, async (req, res, next) => {
     if (req.params.userID || req.params.userName == "") {
         if (req.body.handle || req.body.handle == "") {
             if (req.body.firstName || req.body.firstName == "") {
@@ -120,37 +86,43 @@ app.post('/user/:userID', jsonParser, async (req, res) => {
                             if (req.body.latitude || req.body.latitude == 0) {
                                 if (req.body.longitude || req.body.longitude == 0) {
                                     if (req.body.avatarVal || req.body.avatarVal == 0) {
-                                        let userID = req.params.userID
-                                        let handle = req.body.handle
-                                        let firstName = req.body.firstName
-                                        let lastName = req.body.lastName
-                                        let screenNames = req.body.screenNames
-                                        let ping = req.body.ping
-                                        let latitude = req.body.latitude
-                                        let longitude = req.body.longitude
-                                        let avatarVal = req.body.avatarVal
+                                        if(req.body.lastLogin) {
+                                            let userID = req.params.userID
+                                            let handle = req.body.handle
+                                            let firstName = req.body.firstName
+                                            let lastName = req.body.lastName
+                                            let screenNames = req.body.screenNames
+                                            let ping = req.body.ping
+                                            let latitude = req.body.latitude
+                                            let longitude = req.body.longitude
+                                            let avatarVal = req.body.avatarVal
+                                            let lastLogin = req.body.lastLogin
 
-                                        const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-                                        const session = driver.session();
+                                            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+                                            const session = driver.session();
 
-                                        try {
-                                            const writeQuery = `MERGE (u1:User { id: $userID, handle: $handle, firstName: $firstName, lastName: $lastName, screenNames: $screenNames, ping: $ping, latitude: $latitude, longitude: $longitude, avatarVal: $avatarVal })
-                                                                RETURN u1`
+                                            try {
+                                                const writeQuery = `MERGE (u1:User { id: $userID, handle: $handle, firstName: $firstName, lastName: $lastName, screenNames: $screenNames, ping: $ping, latitude: $latitude, longitude: $longitude, avatarVal: $avatarVal, lastLogin: $lastLogin })
+                                                                    RETURN u1`
 
-                                            const writeResult = await session.writeTransaction(tx =>
-                                                tx.run(writeQuery, { userID, handle, firstName, lastName, screenNames, ping, latitude, longitude, avatarVal })
-                                            )
+                                                const writeResult = await session.writeTransaction(tx =>
+                                                    tx.run(writeQuery, { userID, handle, firstName, lastName, screenNames, ping, latitude, longitude, avatarVal, lastLogin })
+                                                )
 
-                                        } catch (error) {
-                                            var result = { "response": "Unknown error" }
+                                            } catch (error) {
+                                                var result = { "response": "Unknown error" }
+                                                res.send(result)
+                                            } finally {
+                                                var result = { "response": "Success!" }
+                                                res.send(result)
+                                                await session.close()
+                                            }
+
+                                            await driver.close()
+                                        } else {
+                                            var result = { "response": "Missing lastLogin field" }
                                             res.send(result)
-                                        } finally {
-                                            var result = { "response": "Success!" }
-                                            res.send(result)
-                                            await session.close()
                                         }
-
-                                        await driver.close()
                                     } else {
                                         var result = { "response": "Missing avatarVal field" }
                                         res.send(result)
@@ -189,7 +161,8 @@ app.post('/user/:userID', jsonParser, async (req, res) => {
     }
 })
 
-app.get('/user/:userID', jsonParser, async (req, res) => {
+app.get('/user/:userID', jsonParser, async (req, res, next) => {
+    logger.info("In user endpoint")
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -227,20 +200,47 @@ app.get('/user/:userID', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/usernames/:username', jsonParser, async (req, res) => {
+app.post('/user/:userID/last-login', jsonParser, async(req, res, next) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    let userID = req.params.userID
+    
+    if(req.body.lastLogin) {
+        let lastLogin = req.body.lastLogin
+        try {
+            const writeQuery =
+                `MATCH (u:User { id: '${userID}' }) SET u.lastLogin = ${lastLogin}
+            RETURN u`
+
+            const writeResult = await session.writeTransaction(tx =>
+                tx.run(writeQuery, {})
+            )
+
+        } catch (error) {
+            console.log(error)
+            var result = { "response": "Unknown Error Occurred" }
+            res.send(result)
+        } finally {
+            var result = { "response": "Success!" }
+            res.send(result)
+            await session.close()
+        }
+
+        driver.close()
+
+    } else {
+        var result = {"response": "Please include the lastLogin field"}
+        res.send(result)
+    }
+})
+
+app.get('/usernames/:username', jsonParser, async (req, res, next) => {
 
     const username = req.params.username
-    var hasBadWord = false
     var lowerCasedUsername = username.toLowerCase()
 
-    badWordsSet.forEach(badWord => {
-        if (lowerCasedUsername.includes(badWord)) {
-            hasBadWord = true
-        }
-    })
-
-
-    if (hasBadWord) {
+    if (badWordsSet.has(lowerCasedUsername)) {
         var result = { "response": "This username contains a prohibited word." }
         res.send(result)
     } else {
@@ -272,7 +272,7 @@ app.get('/usernames/:username', jsonParser, async (req, res) => {
     }
 })
 
-app.get('/username/:username', jsonParser, async (req, res) => {
+app.get('/username/:username', jsonParser, async (req, res, next) => {
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -300,7 +300,7 @@ app.get('/username/:username', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.post('/game/:gameID', jsonParser, async (req, res) => {
+app.post('/game/:gameID', jsonParser, async (req, res, next) => {
     if (req.params.gameID || req.params.gameID == "") {
         if (req.body.description || req.body.description == "") {
             if (req.body.name || req.body.name == "") {
@@ -389,7 +389,7 @@ app.post('/game/:gameID', jsonParser, async (req, res) => {
     }
 })
 
-app.post('/report-issue', jsonParser, async (req, res) => {
+app.post('/report-issue', jsonParser, async (req, res, next) => {
     if (req.body.userID || req.body.userID == "") {
         if (req.body.time || req.body.time == 0) {
             if (req.body.text || req.body.text == "") {
@@ -452,12 +452,13 @@ app.post('/report-issue', jsonParser, async (req, res) => {
     }
 })
 
-app.post('/post/:postID', jsonParser, async (req, res) => {
+app.post('/post/:postID', jsonParser, async (req, res, next) => {
+
     if (req.params.postID) {
         if (req.body.time) {
             if (req.body.text) {
                 if (req.body.user) {
-                    if (req.body.user.avatarVal) {
+                    if (req.body.user.avatarVal || req.body.user.avatarVal == 0.0) {
                         if (req.body.user.handle) {
                             if (req.body.user.id) {
                                 if (req.body.game) {
@@ -487,23 +488,18 @@ app.post('/post/:postID', jsonParser, async (req, res) => {
                                                     }
                                                     var textArray = text.split(' ')
                                                     for (var i = 0; i < textArray.length; i++) {
-                                                        badWordsSet.forEach(badWord => {
-                                                            if (textArray[i].includes(badWord)) {
-                                                                var newText = ''
-                                                                for (var j = 0; j < textArray[i].length; j++) {
-                                                                    newText += '*'
-                                                                }
-                                                                textArray[i] = newText
+                                                        if(badWordsSet.has(textArray[i])){
+                                                            var newText = ''
+                                                            for (var j = 0; j < textArray[i].length; j++) {
+                                                                newText += '*'
                                                             }
-                                                        })
+                                                            textArray[i] = newText
+                                                        }
                                                     }
                                                     text = ''
                                                     for (var i = 0; i < textArray.length; i++) {
                                                         text += textArray[i] + ' '
                                                     }
-
-                                                    let metaTags = await scrapteMetatags(text)
-                                                    metaTags = JSON.stringify(metaTags)
 
                                                     if (req.body.isComment) {
                                                         if (req.body.parentPostID) {
@@ -513,11 +509,11 @@ app.post('/post/:postID', jsonParser, async (req, res) => {
                                                             const session = driver.session();
 
                                                             try {
-                                                                const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, imagePath: $imagePath, metaTags: $metaTags, numUpvotes: 0})
+                                                                const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, imagePath: $imagePath, numUpvotes: 0})
                                                                                     RETURN p`
 
                                                                 const writeResult = await session.writeTransaction(tx =>
-                                                                    tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL, imagePath, metaTags})
+                                                                    tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL, imagePath})
                                                                 )
 
                                                             } catch (error) {
@@ -568,12 +564,6 @@ app.post('/post/:postID', jsonParser, async (req, res) => {
 
                                                             await driver.close()
 
-
-
-
-
-
-
                                                         } else {
                                                             res.send({ "response": "Please include the parentPostID field" })
                                                         }
@@ -582,11 +572,11 @@ app.post('/post/:postID', jsonParser, async (req, res) => {
                                                         const session = driver.session();
 
                                                         try {
-                                                            const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, imagePath: $imagePath, metaTags: $metaTags, numUpvotes: 0})
+                                                            const writeQuery = `CREATE (p:Post { id: $postID, time: $time, text: $text, avatarVal: $avatarVal, userID: $userID, handle: $handle, coverURL: $coverURL, gameName: $gameName, gameID: $gameID, rating: $rating, imageURL: $imageURL, imagePath: $imagePath, numUpvotes: 0})
                                                                                 RETURN p`
 
                                                             const writeResult = await session.writeTransaction(tx =>
-                                                                tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL, imagePath, metaTags})
+                                                                tx.run(writeQuery, { postID, time, text, avatarVal, userID, handle, coverURL, gameName, gameID, rating, imageURL, imagePath})
                                                             )
 
                                                         } catch (error) {
@@ -630,7 +620,7 @@ app.post('/post/:postID', jsonParser, async (req, res) => {
                                                         } catch (error) {
                                                             console.error('Something went wrong: ', error)
                                                         } finally {
-                                                            var result = { "response": "Success!" }
+                                                            let result = {"response": "success!"}
                                                             res.send(result)
                                                             await session3.close()
                                                         }
@@ -676,18 +666,50 @@ app.post('/post/:postID', jsonParser, async (req, res) => {
     }
 })
 
-app.post('/users/:userID/upvoted-post', jsonParser, async (req, res) => {
+app.get('/post/:postID', jsonParser, async (req, res, next) => {
+    let postID = req.params.postID
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (p:Post) where p.id = '${postID}' RETURN p`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var posts = [];
+        readResult.records.forEach(record => {
+            var post = (record.get('p'))
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(returnPost)) {
+                posts.push(returnPost)
+            }
+        })
+        res.send({ "response": posts })
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+
+})
+
+app.post('/users/:userID/upvoted-post', jsonParser, async (req, res, next) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
     if (req.params.userID || req.params.userID == "") {
         if (req.body.postID || req.body.postID == "") {
             let postID = req.body.postID
             let userID = req.params.userID
 
-            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-            const session = driver.session()
 
             var oldUpvoteCount = 0
             var newUpvoteCount = 0
 
+           
             try {
 
                 const readQuery = `match (p:Post) where p.id = "${postID}" return p.numUpvotes`
@@ -713,7 +735,7 @@ app.post('/users/:userID/upvoted-post', jsonParser, async (req, res) => {
             try {
                 const writeQuery =
                     `MATCH (p:Post { id: '${postID}' }) SET p.numUpvotes = ${newUpvoteCount}
-                RETURN p`
+                    RETURN p`
 
                 const writeResult = await session2.writeTransaction(tx =>
                     tx.run(writeQuery, {})
@@ -730,9 +752,9 @@ app.post('/users/:userID/upvoted-post', jsonParser, async (req, res) => {
             try {
                 const writeQuery2 =
                     `MATCH (u:User),(p:Post)
-                WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
-                CREATE (u)-[r1:Upvoted]->(p)
-                RETURN r1`
+                    WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
+                    CREATE (u)-[r1:Upvoted]->(p)
+                    RETURN r1`
 
                 const writeResult = await session3.writeTransaction(tx =>
                     tx.run(writeQuery2, {})
@@ -747,17 +769,45 @@ app.post('/users/:userID/upvoted-post', jsonParser, async (req, res) => {
                 res.send(result)
                 await session3.close()
             }
-
-            // Don't forget to close the driver connection when you're finished with it
-            await driver.close()
-
+        } else {
+            var result = { "newUpvoteCount": newUpvoteCount }
+            res.send(result)
         }
-    } else {
-        res.send("Missing userID field");
+
+        // Don't forget to close the driver connection when you're finished with it
+        await driver.close()
+
     }
 })
 
-app.post('/users/:userID/downvoted-post', jsonParser, async (req, res) => {
+app.get('/:userID/has-upvoted/:postID', jsonParser, async(req, res, next) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session0 = driver.session()
+
+    let userID = req.params.userID
+    let postID = req.params.postID
+
+    var hasUpvoted = "has not upvoted"
+    
+    try {
+
+        const readQuery = `match (u:User)-[r:Upvoted]->(p:Post) where p.id = "${postID}" AND u.id = "${userID}" return p.numUpvotes`
+        const readResult = await session0.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        if(readResult.records.length > 0) {
+            hasUpvoted = "has upvoted"
+        }
+        res.send({"response": hasUpvoted})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session0.close()
+    }
+    await driver.close()
+})
+
+app.post('/users/:userID/downvoted-post', jsonParser, async (req, res, next) => {
     if (req.params.userID || req.params.userID == "") {
         if (req.body.postID || req.body.postID == "") {
             let postID = req.body.postID
@@ -810,9 +860,7 @@ app.post('/users/:userID/downvoted-post', jsonParser, async (req, res) => {
 
             try {
                 const writeQuery2 =
-                    `MATCH (u:User),(p:Post)
-                WHERE u.id = \"${userID}\" AND p.id = \"${postID}\"
-                MATCH (u)-[r1:Upvoted]->(p)
+                `MATCH (u)-[r1:Upvoted]->(p) where u.id = "${userID}" AND p.id = "${postID}"
                 DELETE r1
                 RETURN r1`
 
@@ -839,7 +887,7 @@ app.post('/users/:userID/downvoted-post', jsonParser, async (req, res) => {
     }
 })
 
-app.post('/users/:userID/followed-game', jsonParser, async (req, res) => {
+app.post('/users/:userID/followed-game', jsonParser, async (req, res, next) => {
     if (req.params.userID || req.params.userID == "") {
         if (req.body.gameID || req.body.gameID == "") {
             let userID = req.params.userID
@@ -878,7 +926,7 @@ app.post('/users/:userID/followed-game', jsonParser, async (req, res) => {
     }
 })
 
-app.post('/users/:userID/unfollowed-game', jsonParser, async (req, res) => {
+app.post('/users/:userID/unfollowed-game', jsonParser, async (req, res, next) => {
     if (req.params.userID || req.params.userID == "") {
         if (req.body.gameID || req.body.gameID == "") {
             let userID = req.params.userID
@@ -914,7 +962,7 @@ app.post('/users/:userID/unfollowed-game', jsonParser, async (req, res) => {
     }
 })
 
-app.post('/users/:userID/rated-game', jsonParser, async (req, res) => {
+app.post('/users/:userID/rated-game', jsonParser, async (req, res, next) => {
     if (req.params.userID || req.params.userID == "") {
         if (req.body.gameID || req.body.gameID == "") {
             if (req.body.rating) {
@@ -1008,7 +1056,7 @@ app.post('/users/:userID/rated-game', jsonParser, async (req, res) => {
     }
 })
 
-app.get('/users/:userID/games-followed', jsonParser, async (req, res) => {
+app.get('/users/:userID/games-followed', jsonParser, async (req, res, next) => {
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -1040,7 +1088,7 @@ app.get('/users/:userID/games-followed', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/users/:userID/following', jsonParser, async (req, res) => {
+app.get('/users/:userID/following', jsonParser, async (req, res, next) => {
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -1071,7 +1119,7 @@ app.get('/users/:userID/following', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/users/:userID/followers', jsonParser, async (req, res) => {
+app.get('/users/:userID/followers', jsonParser, async (req, res, next) => {
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -1102,7 +1150,7 @@ app.get('/users/:userID/followers', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/users/:userID/followed-user/:followeeID', jsonParser, async (req, res) => {
+app.get('/users/:userID/followed-user/:followeeID', jsonParser, async (req, res, next) => {
     if (req.params.userID) {
         if (req.params.followeeID) {
             let followerID = req.params.userID
@@ -1141,7 +1189,7 @@ app.get('/users/:userID/followed-user/:followeeID', jsonParser, async (req, res)
     }
 })
 
-app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req, res) => {
+app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req, res, next) => {
     if (req.params.userID) {
         if (req.body.gameID) {
             let userID = req.params.userID
@@ -1177,7 +1225,7 @@ app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req, re
     }
 })
 
-app.get('/posts/game/:gameID', jsonParser, async (req, res) => {
+app.get('/posts/game/:gameID', jsonParser, async (req, res, next) => {
     var gameID = req.params.gameID
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
@@ -1192,8 +1240,10 @@ app.get('/posts/game/:gameID', jsonParser, async (req, res) => {
         var posts = [];
         readResult.records.forEach(record => {
             var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.push(returnPost)
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(returnPost)){
+                posts.push(returnPost)
+            }
         })
         res.send({ "response": posts })
     } catch (error) {
@@ -1206,7 +1256,7 @@ app.get('/posts/game/:gameID', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/posts', jsonParser, async (req, res) => {
+app.get('/posts', jsonParser, async (req, res, next) => {
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
@@ -1220,8 +1270,10 @@ app.get('/posts', jsonParser, async (req, res) => {
         var posts = [];
         readResult.records.forEach(record => {
             var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.push(returnPost)
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(returnPost)) {
+                posts.push(returnPost)
+            }
         })
         res.send({ "response": posts })
     } catch (error) {
@@ -1234,7 +1286,7 @@ app.get('/posts', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/posts/user/:userID', jsonParser, async (req, res) => {
+app.get('/posts/user/:userID', jsonParser, async (req, res, next) => {
     var userID = req.params.userID
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
@@ -1249,8 +1301,10 @@ app.get('/posts/user/:userID', jsonParser, async (req, res) => {
         var posts = [];
         readResult.records.forEach(record => {
             var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.push(returnPost)
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(returnPost)){
+                posts.push(returnPost)
+            }
         })
         res.send({ "response": posts })
     } catch (error) {
@@ -1263,7 +1317,7 @@ app.get('/posts/user/:userID', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/posts/personalized/:userID', jsonParser, async (req, res) => {
+app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
     var userID = req.params.userID
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
@@ -1279,8 +1333,10 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res) => {
 
         readResult.records.forEach(record => {
             var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.push(returnPost)
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(returnPost)){
+                posts.push(returnPost)
+            }
         })
     } catch (error) {
         console.error('Something went wrong: ', error)
@@ -1315,8 +1371,10 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res) => {
         )
         readResult.records.forEach(record => {
             var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.push(returnPost)
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(returnPost)){
+                posts.push(returnPost)
+            }
         })
     } catch (error) {
         console.error('Something went wrong: ', error)
@@ -1335,7 +1393,7 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res) => {
 
         readResult.records.forEach(record => {
             var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
             if (!posts.includes(returnPost)) {
                 posts.push(returnPost)
             }
@@ -1351,7 +1409,7 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.get('/posts/comments/:parentID', jsonParser, async (req, res) => {
+app.get('/posts/comments/:parentID', jsonParser, async (req, res, next) => {
     var parentID = req.params.parentID
 
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
@@ -1366,8 +1424,10 @@ app.get('/posts/comments/:parentID', jsonParser, async (req, res) => {
         var posts = [];
         readResult.records.forEach(record => {
             var post = (record.get('p1'))
-            var returnPost = new Post(post.properties.text, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.push(returnPost)
+            var returnPost = new Post(post.properties.text, post.numUpvotes, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            if(!posts.includes(post)){
+                posts.push(returnPost)
+            }
         })
         res.send({ "response": posts })
     } catch (error) {
@@ -1380,7 +1440,7 @@ app.get('/posts/comments/:parentID', jsonParser, async (req, res) => {
     await driver.close()
 })
 
-app.post('/user/:userID/update-ping', jsonParser, async (req, res) => {
+app.post('/user/:userID/update-ping', jsonParser, async (req, res, next) => {
     if (req.params.userID) {
         if (req.body.ping) {
             let userID = req.params.userID
@@ -1418,7 +1478,7 @@ app.post('/user/:userID/update-ping', jsonParser, async (req, res) => {
 
 })
 
-app.get('/map/points', jsonParser, async (req, res) => {
+app.get('/map/points', jsonParser, async (req, res, next) => {
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -1431,8 +1491,10 @@ app.get('/map/points', jsonParser, async (req, res) => {
         var mapObjects = [];
         readResult.records.forEach(record => {
             var user = (record.get('u'))
-            var returnObject = new MapObject(user.properties.latitude, user.properties.longitude, user.properties.ping)
-            mapObjects.push(returnObject)
+            if (user.properties.latitude != 0.0 && user.properties.longitude != 0.0){
+                var returnObject = new MapObject(user.properties.latitude, user.properties.longitude, user.properties.ping)
+                mapObjects.push(returnObject)
+            }
         })
         res.send({ "response": mapObjects })
     } catch (error) {
@@ -1467,8 +1529,9 @@ class MiniProfile {
 }
 
 class Post {
-    constructor(text, imageURL, imagePath, time, id, user, game) {
+    constructor(text, numUpvotes, imageURL, imagePath, time, id, user, game) {
         this.text = text;
+        this.numUpvotes = numUpvotes;
         this.imageURL = imageURL;
         this.imagePath = imagePath;
         this.time = time;
