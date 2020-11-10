@@ -48,24 +48,28 @@ app.post('/user/:userID/update', jsonParser, async (req, res, next) => {
     let userID = req.params.userID
     console.log(userID)
     if(req.body.fields) {
+        let fields = req.body.fields
         let keys = Object.keys(req.body.fields)
         keys.forEach( async key => {
-            console.log(key)
-            console.log(req.body.fields[key])
             const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
             const session = driver.session()
+            //logger.info(key)
+            //logger.info(req.body.fields[key])
+
 
             try {
                 const session = driver.session()
                 const writeQuery =
-                    `MATCH (u:User { id: '${userID}' }) SET u.${key} = '${req.body.fields[key]}'
-                RETURN u`
+                    `MATCH (n:User)
+                    WHERE n.id='${userID}'
+                    SET n = $fields`
     
                 const writeResult = await session.writeTransaction(tx =>
-                    tx.run(writeQuery, {})
+                    tx.run(writeQuery, {fields})
                 )
     
             } catch (error) {
+                //logger.info(error)
                 console.log(error)
             } finally {
                 await session.close()
@@ -73,6 +77,8 @@ app.post('/user/:userID/update', jsonParser, async (req, res, next) => {
             }
         })
         res.send({"response": "success!"})
+    } else {
+        res.send({"response": "Please include fields field"})
     }
 })
 
@@ -1241,7 +1247,14 @@ app.get('/posts/game/:gameID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if(!posts.includes(returnPost)){
+            var found = false 
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
@@ -1271,7 +1284,14 @@ app.get('/posts', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if(!posts.includes(returnPost)) {
+            var found = false
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
@@ -1302,7 +1322,14 @@ app.get('/posts/user/:userID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if(!posts.includes(returnPost)){
+            var found = false
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
@@ -1334,7 +1361,14 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if(!posts.includes(returnPost)){
+            var found = false
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
@@ -1372,7 +1406,13 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if(!posts.includes(returnPost)){
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
@@ -1394,7 +1434,13 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if (!posts.includes(returnPost)) {
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
@@ -1425,11 +1471,18 @@ app.get('/posts/comments/:parentID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p1'))
             var returnPost = new Post(post.properties.text, post.numUpvotes, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            if(!posts.includes(post)){
+            var found = false
+            posts.forEach( post=> {
+                if(post.id == returnPost.id) {
+                    found = true
+                }
+            })
+            
+            if(!found){
                 posts.push(returnPost)
             }
         })
-        res.send({ "response": posts })
+        res.send({ "response": posts.sort((a, b) => a.time - b.time) })
     } catch (error) {
         console.error('Something went wrong: ', error)
     } finally {
