@@ -49,33 +49,30 @@ app.post('/user/:userID/update', jsonParser, async (req, res, next) => {
     console.log(userID)
     if(req.body.fields) {
         let fields = req.body.fields
-        let keys = Object.keys(req.body.fields)
-        keys.forEach( async key => {
-            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+        const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+        const session = driver.session()
+        //logger.info(key)
+        //logger.info(req.body.fields[key])
+
+
+        try {
             const session = driver.session()
-            //logger.info(key)
-            //logger.info(req.body.fields[key])
-
-
-            try {
-                const session = driver.session()
-                const writeQuery =
-                    `MATCH (n:User)
-                    WHERE n.id='${userID}'
-                    SET n = $fields`
+            const writeQuery =
+                `MATCH (n:User)
+                WHERE n.id='${userID}'
+                SET n = $fields`
     
-                const writeResult = await session.writeTransaction(tx =>
-                    tx.run(writeQuery, {fields})
-                )
+            const writeResult = await session.writeTransaction(tx =>
+                tx.run(writeQuery, {fields})
+            )
     
-            } catch (error) {
-                //logger.info(error)
-                console.log(error)
-            } finally {
-                await session.close()
-                await driver.close()
-            }
-        })
+        } catch (error) {
+            //logger.info(error)
+            console.log(error)
+        } finally {
+            await session.close()
+            await driver.close()
+        }
         res.send({"response": "success!"})
     } else {
         res.send({"response": "Please include fields field"})
@@ -168,7 +165,7 @@ app.post('/user/:userID', jsonParser, async (req, res, next) => {
 })
 
 app.get('/user/:userID', jsonParser, async (req, res, next) => {
-    logger.info("In user endpoint")
+    //logger.info("In user endpoint")
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
     const session = driver.session()
 
@@ -187,7 +184,7 @@ app.get('/user/:userID', jsonParser, async (req, res, next) => {
             users.push(record.get('u'))
         })
         if (users.length > 0) {
-
+            users[0].properties.lastLogin = parseInt(users[0].properties.lastLogin)
             let response = { "response": users[0] }
             res.send(response)
         } else {
@@ -295,6 +292,7 @@ app.get('/username/:username', jsonParser, async (req, res, next) => {
             users.push(record.get('u'))
         })
 
+        users[0].properties.lastLogin = parseInt(users[0].properties.lastLogin)
         res.send(users[0])
     } catch (error) {
         console.error('Something went wrong: ', error)
@@ -925,7 +923,7 @@ app.post('/users/:userID/followed-game', jsonParser, async (req, res, next) => {
             await driver.close()
 
         } else {
-            res.send("Missing time field");
+            res.send("Missing gameID field");
         }
     } else {
         res.send("Missing userID field");
@@ -1188,7 +1186,7 @@ app.get('/users/:userID/followed-user/:followeeID', jsonParser, async (req, res,
             await driver.close()
 
         } else {
-            res.send("Missing time field");
+            res.send("Missing followeeID field");
         }
     } else {
         res.send("Missing userID field");
@@ -1197,7 +1195,7 @@ app.get('/users/:userID/followed-user/:followeeID', jsonParser, async (req, res,
 
 app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req, res, next) => {
     if (req.params.userID) {
-        if (req.body.gameID) {
+        if (req.params.followeeID) {
             let userID = req.params.userID
             let followeeID = req.params.followeeID
 
@@ -1224,7 +1222,7 @@ app.get('/users/:userID/unfollowed-user/:followeeID', jsonParser, async (req, re
             await driver.close()
 
         } else {
-            res.send("Missing time field");
+            res.send("Missing followeeID field");
         }
     } else {
         res.send("Missing userID field");
@@ -1353,7 +1351,7 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
 
     try {
 
-        const readQuery = `MATCH (u1:User)-[r1:Follows]->(u2:User)-[r2:Posted]->(p:Post)-[r3:PostOf]->(g:Game) WHERE u2.id = '${userID}' RETURN p`
+        const readQuery = `MATCH (u1:User)-[r1:Follows]->(u2:User)-[r2:Posted]->(p:Post)-[r3:PostOf]->(g:Game) WHERE u1.id = '${userID}' RETURN p`
         const readResult = await session.readTransaction(tx =>
             tx.run(readQuery, {})
         )
@@ -1379,7 +1377,7 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
     }
 
     const session2 = driver.session()
-    var gameID = ''
+    var gameIDs = []
     try {
 
         const readQuery = `MATCH (u:User)-[r1:Follows]->(g:Game) WHERE u.id = '${userID}' RETURN g.id`
@@ -1387,7 +1385,7 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
             tx.run(readQuery, {})
         )
         readResult.records.forEach(record => {
-            gameID = record.get('g.id')
+            gameIDs.push(record.get('g.id'))
         })
     } catch (error) {
         console.error('Something went wrong: ', error)
@@ -1395,32 +1393,37 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
         await session2.close()
     }
 
-    const session3 = driver.session()
+    console.log(gameIDs)
+    
 
-    try {
+    gameIDs.forEach(async gameID => {
+        const session3 = driver.session()
+        try {
 
-        const readQuery = `MATCH (p:Post)-[r:PostOf]->(g:Game) WHERE g.id = '${gameID}' RETURN p`
-        const readResult = await session3.readTransaction(tx =>
-            tx.run(readQuery, {})
-        )
-        readResult.records.forEach(record => {
-            var post = (record.get('p'))
-            var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
-            posts.forEach( post=> {
-                if(post.id == returnPost.id) {
-                    found = true
+            const readQuery = `MATCH (p:Post)-[r:PostOf]->(g:Game) WHERE g.id = '${gameID}' RETURN p`
+            const readResult = await session3.readTransaction(tx =>
+                tx.run(readQuery, {})
+            )
+            readResult.records.forEach(record => {
+                var post = (record.get('p'))
+                var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+                var found = false
+                posts.forEach( post=> {
+                    if(post.id == returnPost.id) {
+                        found = true
+                    }
+                })
+                
+                if(!found){
+                    posts.push(returnPost)
                 }
             })
-            
-            if(!found){
-                posts.push(returnPost)
-            }
-        })
-    } catch (error) {
-        console.error('Something went wrong: ', error)
-    } finally {
-        await session3.close()
-    }
+        } catch (error) {
+            console.error('Something went wrong: ', error)
+        } finally {
+            await session3.close()
+        }
+    })
 
     const session4 = driver.session()
 
@@ -1434,6 +1437,7 @@ app.get('/posts/personalized/:userID', jsonParser, async (req, res, next) => {
         readResult.records.forEach(record => {
             var post = (record.get('p'))
             var returnPost = new Post(post.properties.text, post.properties.numUpvotes.low, post.properties.imageURL, post.properties.imagePath, post.properties.time, post.properties.id, new MiniProfile(post.properties.userID, post.properties.handle, post.properties.avatarVal), new MiniGame(post.properties.gameID, post.properties.rating, post.properties.coverURL, post.properties.gameName))
+            var found = false
             posts.forEach( post=> {
                 if(post.id == returnPost.id) {
                     found = true
