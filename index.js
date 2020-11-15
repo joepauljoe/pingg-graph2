@@ -38,6 +38,8 @@ var app = express();
 const port = process.env.PORT || 9000;
 var jsonParser = bodyParser.json()
 
+app.use(require('express-status-monitor')());
+
 app.use(cors());
 
 app.get('/', (req, res, next) => {
