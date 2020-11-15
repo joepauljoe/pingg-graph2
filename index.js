@@ -318,40 +318,45 @@ app.post('/game/:gameID', jsonParser, async (req, res, next) => {
                                             if (req.body.rating || req.body.rating == 0) {
                                                 if (req.body.ratingCount || req.body.ratingCount == 0) {
                                                     if (req.body.screenshots || req.body.firstName == []) {
-                                                        let gameID = req.params.gameID
-                                                        let description = req.body.description
-                                                        let name = req.body.name
-                                                        let ageRatings = req.body.ageRatings
-                                                        let videos = req.body.videos
-                                                        let coverURL = req.body.coverURL
-                                                        let firstReleaseDate = req.body.firstReleaseDate
-                                                        let franchise = req.body.franchise
-                                                        let genres = req.body.genres
-                                                        let platforms = req.body.platforms
-                                                        let rating = req.body.rating
-                                                        let ratingCount = req.body.ratingCount
-                                                        let screenshots = req.body.screenshots
+                                                            if(req.body.searchableIndex) {
+                                                            let gameID = req.params.gameID
+                                                            let description = req.body.description
+                                                            let name = req.body.name
+                                                            let ageRatings = req.body.ageRatings
+                                                            let videos = req.body.videos
+                                                            let coverURL = req.body.coverURL
+                                                            let firstReleaseDate = req.body.firstReleaseDate
+                                                            let franchise = req.body.franchise
+                                                            let genres = req.body.genres
+                                                            let platforms = req.body.platforms
+                                                            let rating = req.body.rating
+                                                            let ratingCount = req.body.ratingCount
+                                                            let screenshots = req.body.screenshots
+                                                            let searchableIndex = JSON.stringify(req.body.searchableIndex)
 
-                                                        const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-                                                        const session = driver.session();
+                                                            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+                                                            const session = driver.session();
 
-                                                        try {
-                                                            const writeQuery = `MERGE (g:Game { id: $gameID, description: $description, name: $name, ageRatings: $ageRatings, videos: $videos, coverURL: $coverURL, firstReleaseDate: $firstReleaseDate, franchise: $franchise, genres: $genres, platforms: $platforms, rating: $rating, ratingCount: $ratingCount, screenshots: $screenshots })
-                                                                                RETURN g`
+                                                            try {
+                                                                const writeQuery = `MERGE (g:Game { id: $gameID, description: $description, name: $name, ageRatings: $ageRatings, videos: $videos, coverURL: $coverURL, firstReleaseDate: $firstReleaseDate, franchise: $franchise, genres: $genres, platforms: $platforms, rating: $rating, ratingCount: $ratingCount, screenshots: $screenshots, searchableIndex: $searchableIndex })
+                                                                                    RETURN g`
 
-                                                            const writeResult = await session.writeTransaction(tx =>
-                                                                tx.run(writeQuery, { gameID, description, name, ageRatings, videos, coverURL, firstReleaseDate, franchise, genres, platforms, rating, ratingCount, screenshots })
-                                                            )
+                                                                const writeResult = await session.writeTransaction(tx =>
+                                                                    tx.run(writeQuery, { gameID, description, name, ageRatings, videos, coverURL, firstReleaseDate, franchise, genres, platforms, rating, ratingCount, screenshots, searchableIndex })
+                                                                )
 
-                                                        } catch (error) {
-                                                            console.error('Something went wrong: ', error)
-                                                        } finally {
-                                                            var result = { "response": "Success!" }
-                                                            res.send(result)
-                                                            await session.close()
+                                                            } catch (error) {
+                                                                console.error('Something went wrong: ', error)
+                                                            } finally {
+                                                                var result = { "response": "Success!" }
+                                                                res.send(result)
+                                                                await session.close()
+                                                            }
+
+                                                            await driver.close()
+                                                        } else {
+                                                            res.sendStatus("Missing searchableIndex field")
                                                         }
-
-                                                        await driver.close()
                                                     } else {
                                                         res.sendStatus("Missing screenshots field")
                                                     }
