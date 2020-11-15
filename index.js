@@ -1077,74 +1077,98 @@ app.post('/users/:userID/rated-game', jsonParser, async (req, res, next) => {
                 let rating = req.body.rating
 
                 const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-                const session = driver.session()
-
-                var ratings = []
-                var ratingCounts = []
-                var newRating = 0.0
-                var newRatingCount = 0
+                const session0 = driver.session()
+                var hasRated = false
 
                 try {
 
-                    const readQuery = `match (g:Game) where g.id = "${gameID}" return g.rating, g.ratingCount`
-                    const readResult = await session.readTransaction(tx =>
+                    const readQuery = `MATCH (u:User)-[r:Rated]->(g:Game) where u.id = '${userID}' and g.id = '${gameID}' RETURN g`
+                    const readResult = await session0.readTransaction(tx =>
                         tx.run(readQuery, {})
                     )
-                    readResult.records.forEach(record => {
-                        ratings.push(record.get('g.rating'))
-                        ratingCounts.push(record.get('g.ratingCount'))
-                    })
-
-                    let oldTotalRating = ratings[0] * parseInt(ratingCounts[0])
-                    newRatingCount = parseInt(ratingCounts[0]) + 1
-                    newRating = (oldTotalRating + rating) / newRatingCount
+                    if(readResult.records.length > 0) {
+                        hasRated = true
+                    }
                 } catch (error) {
                     console.error('Something went wrong: ', error)
                 } finally {
-                    await session.close()
+                    await session0.close()
                 }
 
+                if (!hasRated) {
+
+                    const session = driver.session()
+
+                    var ratings = []
+                    var ratingCounts = []
+                    var newRating = 0.0
+                    var newRatingCount = 0
+
+                    try {
+
+                        const readQuery = `match (g:Game) where g.id = "${gameID}" return g.rating, g.ratingCount`
+                        const readResult = await session.readTransaction(tx =>
+                            tx.run(readQuery, {})
+                        )
+                        readResult.records.forEach(record => {
+                            ratings.push(record.get('g.rating'))
+                            ratingCounts.push(record.get('g.ratingCount'))
+                        })
+
+                        let oldTotalRating = ratings[0] * parseInt(ratingCounts[0])
+                        newRatingCount = parseInt(ratingCounts[0]) + 1
+                        newRating = (oldTotalRating + rating) / newRatingCount
+                    } catch (error) {
+                        console.error('Something went wrong: ', error)
+                    } finally {
+                        await session.close()
+                    }
 
 
 
-                const session2 = driver.session();
 
-                try {
-                    const writeQuery =
-                        `MATCH (g:Game { id: '${gameID}' }) SET g.rating = ${newRating}, g.ratingCount = ${newRatingCount}
-                    RETURN g`
+                    const session2 = driver.session();
 
-                    const writeResult = await session2.writeTransaction(tx =>
-                        tx.run(writeQuery, {})
-                    )
+                    try {
+                        const writeQuery =
+                            `MATCH (g:Game { id: '${gameID}' }) SET g.rating = ${newRating}, g.ratingCount = ${newRatingCount}
+                        RETURN g`
 
-                } catch (error) {
-                    var result = { "response": "Unknown Error Occurred" }
-                } finally {
-                    await session2.close()
-                }
+                        const writeResult = await session2.writeTransaction(tx =>
+                            tx.run(writeQuery, {})
+                        )
 
-                const session3 = driver.session();
+                    } catch (error) {
+                        var result = { "response": "Unknown Error Occurred" }
+                    } finally {
+                        await session2.close()
+                    }
 
-                try {
-                    const writeQuery2 =
-                        `MATCH (u:User),(g:Game)
-                    WHERE u.id = \"${userID}\" AND g.id = \"${gameID}\"
-                    CREATE (u)-[r1:Rated]->(g)
-                    RETURN r1`
+                    const session3 = driver.session();
 
-                    const writeResult = await session3.writeTransaction(tx =>
-                        tx.run(writeQuery2, {})
-                    )
+                    try {
+                        const writeQuery2 =
+                            `MATCH (u:User),(g:Game)
+                        WHERE u.id = \"${userID}\" AND g.id = \"${gameID}\"
+                        CREATE (u)-[r1:Rated]->(g)
+                        RETURN r1`
 
-                } catch (error) {
-                    console.error('Something went wrong: ', error)
-                    var result = { "response": "Unknown Error Occurred" }
+                        const writeResult = await session3.writeTransaction(tx =>
+                            tx.run(writeQuery2, {})
+                        )
+
+                    } catch (error) {
+                        console.error('Something went wrong: ', error)
+                        var result = { "response": "Unknown Error Occurred" }
+                        res.send(result)
+                    } finally {
+                        var result = { "newRating": newRating }
+                        res.send(result)
+                        await session3.close()
+                    }
+                } else {
+                    var result = {"response": "Sorry, you have already rated this game!"}
                     res.send(result)
-                } finally {
-                    var result = { "newRating": newRating }
-                    res.send(result)
-                    await session3.close()
                 }
 
                 // Don't forget to close the driver connection when you're finished with it
