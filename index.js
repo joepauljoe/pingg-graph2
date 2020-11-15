@@ -238,18 +238,19 @@ app.post('/user/:userID/last-login', jsonParser, async(req, res, next) => {
     }
 })
 
-app.get('/usernames/:username', jsonParser, async (req, res, next) => {
+app.get('/usernames/:username/:userID', jsonParser, async (req, res, next) => {
 
     const username = req.params.username
     var lowerCasedUsername = username.toLowerCase()
+    let userID = req.params.userID
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
 
     if (badWordsSet.has(lowerCasedUsername)) {
         var result = { "response": "This username contains a prohibited word." }
         res.send(result)
     } else {
         try {
-            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-            const session = driver.session()
 
             const readQuery = `match (u:User) where u.handle = "${username.toString()}" return u`
             const readResult = await session.readTransaction(tx =>
@@ -261,8 +262,14 @@ app.get('/usernames/:username', jsonParser, async (req, res, next) => {
                 var result = { "response": "No users with this name." }
                 res.send(result)
             } else {
-                var result = { "response": "This username is already taken." }
-                res.send(result)
+                let id = readResult.records[0].get('u').properties.id
+                if(id == userID) {
+                    var result = { "response": "No users with this name." }
+                    res.send(result)
+                } else {
+                    var result = { "response": "This username is already taken." }
+                    res.send(result)
+                }
             }
         } catch (error) {
             console.error('Something went wrong: ', error)
@@ -396,6 +403,93 @@ app.post('/game/:gameID', jsonParser, async (req, res, next) => {
     } else {
         res.send("Missing gameID field");
     }
+})
+
+app.get('/games', jsonParser, async (req, res, next) => {
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (g:Game) RETURN g`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var games = [];
+        readResult.records.forEach(record => {
+            var game = (record.get('g'))
+            var returnGame = new Game(game.properties.id, game.properties.description, game.properties.ageRatings, game.properties.videos, game.properties.rating, game.properties.coverURL, game.properties.name, game.properties.firstReleaseDate, game.properties.franchise, game.properties.genres, game.properties.platforms, game.properties.screenshots, game.properties.ratingCount, JSON.parse(game.properties.searchableIndex))
+            
+            games.push(returnGame)
+        })
+        res.send({ "response": games })
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+})
+
+app.get('/game/:gameID', jsonParser, async (req, res, next) => {
+    let gameID = req.params.gameID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    var game;
+
+    try {
+
+        const readQuery = `match (g:Game) where g.id = "${gameID}" return g`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        readResult.records.forEach(record => {
+            let tempGame = record.get('g')
+            game = new Game(tempGame.properties.id, tempGame.properties.description, tempGame.properties.ageRatings, tempGame.properties.videos, tempGame.properties.rating, tempGame.properties.coverURL, tempGame.properties.name, tempGame.properties.firstReleaseDate, tempGame.properties.franchise, tempGame.properties.genres, tempGame.properties.platforms, tempGame.properties.screenshots, tempGame.properties.ratingCount, JSON.parse(tempGame.properties.searchableIndex))
+        })
+
+        res.send(game)
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+
+})
+
+app.get('/game/:gameID/followers', jsonParser, async (req, res, next) => {
+    let gameID = req.params.gameID
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    var numFollowers;
+
+    try {
+
+        const readQuery = `match (u:User)-[r:Follows]->(g:Game) where g.id = "${gameID}" return g`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        numFollowers = readResult.records.length
+
+        res.send({"response":numFollowers})
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    // Don't forget to close the driver connection when you're finished with it
+    await driver.close()
+
 })
 
 app.post('/report-issue', jsonParser, async (req, res, next) => {
@@ -1608,5 +1702,24 @@ class MapObject {
         this.latitude = latitude;
         this.longitude = longitude;
         this.ping = ping;
+    }
+}
+
+class Game {
+    constructor(id, description, ageRatings, videos, rating, coverURL, name, firstReleaseDate, franchise, genres, platforms, screenshots, ratingCount, searchableIndex) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.ageRatings = ageRatings;
+        this.videos = videos;
+        this.coverURL = coverURL;
+        this.rating = rating;
+        this.platforms = platforms;
+        this.genres = genres;
+        this.franchise = franchise;
+        this.firstReleaseDate = firstReleaseDate;
+        this.screenshots = screenshots;
+        this.ratingCount = ratingCount;
+        this.searchableIndex = searchableIndex;
     }
 }
