@@ -92,38 +92,44 @@ app.post('/user/:userID', jsonParser, async (req, res, next) => {
                                 if (req.body.longitude || req.body.longitude == 0) {
                                     if (req.body.avatarVal || req.body.avatarVal == 0) {
                                         if(req.body.lastLogin) {
-                                            let userID = req.params.userID
-                                            let handle = req.body.handle
-                                            let firstName = req.body.firstName
-                                            let lastName = req.body.lastName
-                                            let screenNames = req.body.screenNames
-                                            let ping = req.body.ping
-                                            let latitude = req.body.latitude
-                                            let longitude = req.body.longitude
-                                            let avatarVal = req.body.avatarVal
-                                            let lastLogin = req.body.lastLogin
+                                            if(req.body.locationEnabled) {
+                                                let userID = req.params.userID
+                                                let handle = req.body.handle
+                                                let firstName = req.body.firstName
+                                                let lastName = req.body.lastName
+                                                let screenNames = req.body.screenNames
+                                                let ping = req.body.ping
+                                                let latitude = req.body.latitude
+                                                let longitude = req.body.longitude
+                                                let avatarVal = req.body.avatarVal
+                                                let lastLogin = req.body.lastLogin
+                                                let locationEnabled = req.body.locationEnabled
 
-                                            const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-                                            const session = driver.session();
+                                                const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+                                                const session = driver.session();
 
-                                            try {
-                                                const writeQuery = `MERGE (u1:User { id: $userID, handle: $handle, firstName: $firstName, lastName: $lastName, screenNames: $screenNames, ping: $ping, latitude: $latitude, longitude: $longitude, avatarVal: $avatarVal, lastLogin: $lastLogin })
-                                                                    RETURN u1`
+                                                try {
+                                                    const writeQuery = `MERGE (u1:User { id: $userID, handle: $handle, firstName: $firstName, lastName: $lastName, screenNames: $screenNames, ping: $ping, latitude: $latitude, longitude: $longitude, avatarVal: $avatarVal, lastLogin: $lastLogin, locationEnabled: $locationEnabled })
+                                                                        RETURN u1`
 
-                                                const writeResult = await session.writeTransaction(tx =>
-                                                    tx.run(writeQuery, { userID, handle, firstName, lastName, screenNames, ping, latitude, longitude, avatarVal, lastLogin })
-                                                )
+                                                    const writeResult = await session.writeTransaction(tx =>
+                                                        tx.run(writeQuery, { userID, handle, firstName, lastName, screenNames, ping, latitude, longitude, avatarVal, lastLogin, locationEnabled })
+                                                    )
 
-                                            } catch (error) {
-                                                var result = { "response": "Unknown error" }
+                                                } catch (error) {
+                                                    var result = { "response": "Unknown error" }
+                                                    res.send(result)
+                                                } finally {
+                                                    var result = { "response": "Success!" }
+                                                    res.send(result)
+                                                    await session.close()
+                                                }
+
+                                                await driver.close()
+                                            } else {
+                                                var result = { "response": "Missing locationEnabled field" }
                                                 res.send(result)
-                                            } finally {
-                                                var result = { "response": "Success!" }
-                                                res.send(result)
-                                                await session.close()
                                             }
-
-                                            await driver.close()
                                         } else {
                                             var result = { "response": "Missing lastLogin field" }
                                             res.send(result)
@@ -1687,6 +1693,37 @@ app.get('/map/points', jsonParser, async (req, res, next) => {
 
     // Don't forget to close the driver connection when you're finished with it
     await driver.close()
+})
+
+app.get('/search/:searchTerm', jsonParser, async(req,res,next) => {
+    let searchTerm = req.params.searchTerm
+
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+    const session = driver.session()
+
+    try {
+
+        const readQuery = `MATCH (g:Game) RETURN g ORDER BY g.rating DESC`
+        const readResult = await session.readTransaction(tx =>
+            tx.run(readQuery, {})
+        )
+        var games = [];
+        readResult.records.forEach(record => {
+            var game = (record.get('g'))
+            if(games.length < 5 && JSON.parse(game.properties.searchableIndex)[searchTerm]) {
+                games.push(game)
+            }
+        })
+
+        res.send({ "response": games })
+    } catch (error) {
+        console.error('Something went wrong: ', error)
+    } finally {
+        await session.close()
+    }
+
+    await driver.close()
+    
 })
 
 app.listen(port, () => {
